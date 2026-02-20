@@ -101,7 +101,20 @@ python app.py
 Open in browser:
 - http://127.0.0.1:5000
 
-If you see `Model: NOT LOADED`, add a trained model file (example: `best_malaria_model_fixed.h5`) in the root or `models/`, then restart.
+If you see `Model: NOT LOADED`:
+1. Confirm model exists:
+```bash
+ls -lh models/best_model.keras
+ls -lh models/class_indices.json
+```
+2. If missing, train a model:
+```bash
+python train.py --train-dir data/splits/train --valid-dir data/splits/valid --epochs 8 --batch-size 32 --model-dir models
+```
+3. Restart app:
+```bash
+python app.py
+```
 
 Health endpoint:
 - `GET /health`

@@ -26,5 +26,5 @@ env/
 
 # Local uploads and generated artifacts
 uploads/
-
-# Keep training/data/model artifacts tracked for full project upload
+data/
+Smartbrdge-project/

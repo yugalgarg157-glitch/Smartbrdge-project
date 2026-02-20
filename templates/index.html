@@ -3,79 +3,494 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Malaria Cell Detection</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    <title>MalariaScope AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='dark-title-1') }}" />
   </head>
   <body>
-    <main class="container">
-      <h1>Malaria Cell Detection</h1>
-      <p class="subtitle">Upload a blood cell image (PNG/JPG/JPEG) to detect malaria.</p>
+    <div class="bg-orb bg-orb-a"></div>
+    <div class="bg-orb bg-orb-b"></div>
+    <div class="bg-grid"></div>
 
-      <form id="predict-form" class="card">
-        <input id="file-input" type="file" accept=".png,.jpg,.jpeg,image/*" required />
-        <button type="submit">Analyze Sample</button>
-      </form>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">+</div>
+          <div>
+            <p class="brand-title">MalariaScope AI</p>
+            <p class="brand-sub">Microscopic Blood Cell Screening</p>
+          </div>
+        </div>
+        <div id="health-pill" class="health-pill health-pill--checking">
+          <span class="health-dot"></span>
+          <span id="health-text">Checking server...</span>
+        </div>
+      </header>
 
-      <section id="result" class="result hidden"></section>
+      <section class="hero">
+        <h1>Precision Malaria Screening in Seconds</h1>
+        <p>
+          Upload a microscopic blood cell image to classify it as <strong>Parasitized</strong> or
+          <strong>Uninfected</strong>, with confidence metrics and analysis details.
+        </p>
+      </section>
+
+      <section class="panel visual-lab">
+        <div class="panel-head">
+          <h2>3D Cell Atlas</h2>
+        </div>
+        <div class="cell-grid">
+          <figure class="cell-card cell-card--parasitized">
+            <div class="cell-3d cell-3d--parasitized" aria-hidden="true">
+              <span class="speck speck-a"></span>
+              <span class="speck speck-b"></span>
+              <span class="speck speck-c"></span>
+            </div>
+            <figcaption>
+              <h3>Parasitized Cell</h3>
+              <p>Dark violet inclusions suggest visible parasite presence.</p>
+            </figcaption>
+          </figure>
+
+          <figure class="cell-card cell-card--uninfected">
+            <div class="cell-3d cell-3d--uninfected" aria-hidden="true">
+              <span class="gloss gloss-a"></span>
+            </div>
+            <figcaption>
+              <h3>Uninfected Cell</h3>
+              <p>Smooth morphology with clear cytoplasm and no parasite markers.</p>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="dashboard">
+        <article class="panel panel-upload">
+          <h2>Upload Sample</h2>
+
+          <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload blood cell image">
+            <input id="file-input" type="file" accept=".png,.jpg,.jpeg,image/*" hidden />
+            <p class="drop-title">Drop your microscopic image here</p>
+            <p class="drop-sub">or click to browse from your device</p>
+            <div class="drop-tags">
+              <span>PNG</span>
+              <span>JPG</span>
+              <span>JPEG</span>
+            </div>
+          </div>
+
+          <div class="preview-wrap">
+            <img id="preview-image" class="preview-image hidden" alt="Selected blood cell preview" />
+            <div id="preview-empty" class="preview-empty">No sample selected yet</div>
+          </div>
+
+          <p id="file-meta" class="file-meta">Waiting for image upload...</p>
+
+          <div class="actions">
+            <button id="analyze-btn" class="btn btn-primary" type="button" disabled>Analyze Sample</button>
+            <button id="clear-btn" class="btn btn-ghost" type="button">Clear</button>
+          </div>
+        </article>
+
+        <article class="panel panel-result">
+          <div class="panel-head">
+            <h2>Diagnostic Report</h2>
+            <button id="copy-btn" class="btn btn-small btn-ghost" type="button" disabled>Copy JSON</button>
+          </div>
+
+          <div id="result-card" class="result-card result-card--idle">
+            <div id="result-icon" class="result-icon">○</div>
+            <div>
+              <h3 id="result-title">Awaiting Analysis</h3>
+              <p id="result-note">Upload a sample and click Analyze Sample.</p>
+            </div>
+          </div>
+
+          <div class="metric-block">
+            <div class="metric-head">
+              <span>Confidence</span>
+              <strong id="confidence-text">0%</strong>
+            </div>
+            <div class="meter">
+              <div id="confidence-fill" class="meter-fill"></div>
+            </div>
+          </div>
+
+          <div class="prob-grid">
+            <div class="prob-item">
+              <div class="prob-head">
+                <span>Parasitized</span>
+                <strong id="para-val">0%</strong>
+              </div>
+              <div class="mini-meter"><div id="para-fill" class="mini-fill mini-fill--danger"></div></div>
+            </div>
+            <div class="prob-item">
+              <div class="prob-head">
+                <span>Uninfected</span>
+                <strong id="uninf-val">0%</strong>
+              </div>
+              <div class="mini-meter"><div id="uninf-fill" class="mini-fill mini-fill--safe"></div></div>
+            </div>
+          </div>
+
+          <dl class="details">
+            <div>
+              <dt>Model</dt>
+              <dd id="model-val">-</dd>
+            </div>
+            <div>
+              <dt>Processing</dt>
+              <dd id="time-val">-</dd>
+            </div>
+            <div>
+              <dt>Timestamp</dt>
+              <dd id="timestamp-val">-</dd>
+            </div>
+            <div>
+              <dt>Image Quality</dt>
+              <dd id="quality-val">-</dd>
+            </div>
+          </dl>
+
+          <p class="disclaimer">
+            This is an AI screening support system. All results must be reviewed by qualified healthcare professionals.
+          </p>
+        </article>
+      </section>
+
+      <section class="panel history-panel">
+        <div class="panel-head">
+          <h2>Recent Predictions</h2>
+          <button id="clear-history-btn" class="btn btn-small btn-ghost" type="button">Clear History</button>
+        </div>
+        <ul id="history-list" class="history-list">
+          <li class="history-empty">No predictions yet.</li>
+        </ul>
+      </section>
     </main>
 
     <script>
-      const form = document.getElementById("predict-form");
-      const fileInput = document.getElementById("file-input");
-      const resultBox = document.getElementById("result");
+      const HISTORY_KEY = "malaria_prediction_history_v1";
+      const MAX_HISTORY = 6;
 
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
+      const elements = {
+        healthPill: document.getElementById("health-pill"),
+        healthText: document.getElementById("health-text"),
+        dropzone: document.getElementById("dropzone"),
+        fileInput: document.getElementById("file-input"),
+        fileMeta: document.getElementById("file-meta"),
+        previewImage: document.getElementById("preview-image"),
+        previewEmpty: document.getElementById("preview-empty"),
+        analyzeBtn: document.getElementById("analyze-btn"),
+        clearBtn: document.getElementById("clear-btn"),
+        copyBtn: document.getElementById("copy-btn"),
+        clearHistoryBtn: document.getElementById("clear-history-btn"),
+        resultCard: document.getElementById("result-card"),
+        resultIcon: document.getElementById("result-icon"),
+        resultTitle: document.getElementById("result-title"),
+        resultNote: document.getElementById("result-note"),
+        confidenceText: document.getElementById("confidence-text"),
+        confidenceFill: document.getElementById("confidence-fill"),
+        paraVal: document.getElementById("para-val"),
+        uninfVal: document.getElementById("uninf-val"),
+        paraFill: document.getElementById("para-fill"),
+        uninfFill: document.getElementById("uninf-fill"),
+        modelVal: document.getElementById("model-val"),
+        timeVal: document.getElementById("time-val"),
+        timestampVal: document.getElementById("timestamp-val"),
+        qualityVal: document.getElementById("quality-val"),
+        historyList: document.getElementById("history-list"),
+      };
 
-        if (!fileInput.files.length) {
-          showError("Please select an image.");
+      const state = {
+        selectedFile: null,
+        previewUrl: null,
+        lastResult: null,
+        history: [],
+      };
+
+      function clampPercent(value) {
+        return Math.max(0, Math.min(100, Number(value || 0)));
+      }
+
+      function formatSize(bytes) {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+      }
+
+      function setHealth(mode, text) {
+        elements.healthPill.className = `health-pill health-pill--${mode}`;
+        elements.healthText.textContent = text;
+      }
+
+      async function refreshHealth() {
+        setHealth("checking", "Checking server...");
+        try {
+          const res = await fetch("/health");
+          const data = await res.json();
+          if (!res.ok || data.status !== "running") {
+            setHealth("offline", "Server unavailable");
+            return;
+          }
+          if (data.model_loaded) {
+            setHealth("online", "System ready");
+          } else {
+            setHealth("warn", "Server on, model missing");
+          }
+        } catch {
+          setHealth("offline", "Server unavailable");
+        }
+      }
+
+      function setResultState(type, title, note) {
+        elements.resultCard.className = `result-card result-card--${type}`;
+        elements.resultTitle.textContent = title;
+        elements.resultNote.textContent = note;
+        const iconMap = {
+          idle: "○",
+          loading: "◔",
+          safe: "✓",
+          danger: "!",
+          error: "×",
+        };
+        elements.resultIcon.textContent = iconMap[type] || "○";
+      }
+
+      function resetMetrics() {
+        elements.confidenceText.textContent = "0%";
+        elements.confidenceFill.style.width = "0%";
+        elements.paraVal.textContent = "0%";
+        elements.uninfVal.textContent = "0%";
+        elements.paraFill.style.width = "0%";
+        elements.uninfFill.style.width = "0%";
+        elements.modelVal.textContent = "-";
+        elements.timeVal.textContent = "-";
+        elements.timestampVal.textContent = "-";
+        elements.qualityVal.textContent = "-";
+      }
+
+      function setFile(file) {
+        if (!file) return;
+        if (!file.type.startsWith("image/")) {
+          setResultState("error", "Invalid File", "Please upload a PNG/JPG/JPEG image.");
           return;
         }
 
-        const fd = new FormData();
-        fd.append("file", fileInput.files[0]);
+        state.selectedFile = file;
+        elements.fileMeta.textContent = `${file.name} • ${formatSize(file.size)}`;
+        elements.analyzeBtn.disabled = false;
 
-        resultBox.className = "result";
-        resultBox.textContent = "Analyzing...";
+        if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+        state.previewUrl = URL.createObjectURL(file);
+        elements.previewImage.src = state.previewUrl;
+        elements.previewImage.classList.remove("hidden");
+        elements.previewEmpty.classList.add("hidden");
+      }
+
+      function clearSelection() {
+        state.selectedFile = null;
+        state.lastResult = null;
+        elements.fileInput.value = "";
+        elements.fileMeta.textContent = "Waiting for image upload...";
+        elements.analyzeBtn.disabled = true;
+        elements.copyBtn.disabled = true;
+        if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+        state.previewUrl = null;
+        elements.previewImage.src = "";
+        elements.previewImage.classList.add("hidden");
+        elements.previewEmpty.classList.remove("hidden");
+        setResultState("idle", "Awaiting Analysis", "Upload a sample and click Analyze Sample.");
+        resetMetrics();
+      }
+
+      function setLoading(isLoading) {
+        elements.analyzeBtn.disabled = isLoading || !state.selectedFile;
+        elements.clearBtn.disabled = isLoading;
+        elements.copyBtn.disabled = isLoading || !state.lastResult;
+        elements.analyzeBtn.textContent = isLoading ? "Analyzing..." : "Analyze Sample";
+      }
+
+      function saveHistory() {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(state.history));
+      }
+
+      function loadHistory() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+          state.history = Array.isArray(parsed) ? parsed : [];
+        } catch {
+          state.history = [];
+        }
+      }
+
+      function renderHistory() {
+        if (!state.history.length) {
+          elements.historyList.innerHTML = '<li class="history-empty">No predictions yet.</li>';
+          return;
+        }
+
+        elements.historyList.innerHTML = state.history
+          .map((item) => {
+            const tone = item.prediction === "Parasitized" ? "danger" : "safe";
+            return `
+              <li class="history-item history-item--${tone}">
+                <div class="history-top">
+                  <strong>${item.prediction.toUpperCase()}</strong>
+                  <span>${item.confidence}%</span>
+                </div>
+                <p>${item.fileName}</p>
+                <small>${item.timestamp}</small>
+              </li>
+            `;
+          })
+          .join("");
+      }
+
+      function addHistoryEntry(data) {
+        state.history.unshift({
+          prediction: data.prediction,
+          confidence: Number(data.confidence).toFixed(2),
+          timestamp: data.timestamp || new Date().toLocaleString(),
+          fileName: state.selectedFile ? state.selectedFile.name : "Unknown file",
+        });
+        state.history = state.history.slice(0, MAX_HISTORY);
+        saveHistory();
+        renderHistory();
+      }
+
+      function renderPrediction(data) {
+        const isParasitized = data.prediction === "Parasitized";
+        const confidence = clampPercent(data.confidence);
+        const parasitized = clampPercent(data.details?.parasitized_probability);
+        const uninfected = clampPercent(data.details?.uninfected_probability);
+
+        if (isParasitized) {
+          setResultState("danger", "PARASITIZED", "Malaria parasites detected. Medical review required.");
+        } else {
+          setResultState("safe", "UNINFECTED", "No malaria parasites detected in this sample.");
+        }
+
+        elements.confidenceText.textContent = `${confidence.toFixed(2)}%`;
+        elements.confidenceFill.style.width = `${confidence}%`;
+
+        elements.paraVal.textContent = `${parasitized.toFixed(2)}%`;
+        elements.uninfVal.textContent = `${uninfected.toFixed(2)}%`;
+        elements.paraFill.style.width = `${parasitized}%`;
+        elements.uninfFill.style.width = `${uninfected}%`;
+
+        elements.modelVal.textContent = data.model || "N/A";
+        elements.timeVal.textContent = data.processing_time ? `${data.processing_time}s` : "N/A";
+        elements.timestampVal.textContent = data.timestamp || "N/A";
+        elements.qualityVal.textContent = data.image_quality || "N/A";
+
+        state.lastResult = data;
+        elements.copyBtn.disabled = false;
+        addHistoryEntry(data);
+      }
+
+      async function analyzeSample() {
+        if (!state.selectedFile) {
+          setResultState("error", "No Image Selected", "Please upload an image first.");
+          return;
+        }
+
+        setLoading(true);
+        setResultState("loading", "Analyzing Sample", "Model inference in progress...");
+
+        const fd = new FormData();
+        fd.append("file", state.selectedFile);
 
         try {
-          const res = await fetch("/predict", {
-            method: "POST",
-            body: fd,
-          });
-          const data = await res.json();
+          const response = await fetch("/predict", { method: "POST", body: fd });
+          const data = await response.json();
 
-          if (!res.ok || !data.success) {
-            showError(data.error || "Prediction failed.");
+          if (!response.ok || !data.success) {
+            setResultState("error", "Analysis Failed", data.error || "Prediction could not be completed.");
             return;
           }
 
-          const isParasitized = data.prediction === "Parasitized";
-          const headline = isParasitized ? "PARASITIZED (Malaria Detected)" : "UNINFECTED (No Malaria Detected)";
-          const note = isParasitized
-            ? "Malaria parasites detected. Verify with healthcare professional."
-            : "No malaria parasites detected. Verify with healthcare professional.";
+          renderPrediction(data);
+        } catch {
+          setResultState("error", "Server Error", "Unable to reach prediction endpoint.");
+        } finally {
+          setLoading(false);
+        }
+      }
 
-          resultBox.className = `result ${isParasitized ? "err" : "ok"}`;
-          resultBox.innerHTML = `
-            <h2>${headline}</h2>
-            <p><strong>Confidence:</strong> ${data.confidence}%</p>
-            <p><strong>Parasitized Probability:</strong> ${data.details.parasitized_probability}%</p>
-            <p><strong>Uninfected Probability:</strong> ${data.details.uninfected_probability}%</p>
-            <p><strong>Model:</strong> ${data.model || "N/A"}</p>
-            <p><strong>Processing Time:</strong> ${data.processing_time || "N/A"}s</p>
-            <p><strong>Timestamp:</strong> ${data.timestamp}</p>
-            <p class="note">${note}</p>
-          `;
-        } catch (err) {
-          showError("Server error. Please try again.");
+      function setupDropzone() {
+        const stopDefaults = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        };
+
+        ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+          elements.dropzone.addEventListener(eventName, stopDefaults);
+        });
+
+        ["dragenter", "dragover"].forEach((eventName) => {
+          elements.dropzone.addEventListener(eventName, () => {
+            elements.dropzone.classList.add("dropzone--active");
+          });
+        });
+
+        ["dragleave", "drop"].forEach((eventName) => {
+          elements.dropzone.addEventListener(eventName, () => {
+            elements.dropzone.classList.remove("dropzone--active");
+          });
+        });
+
+        elements.dropzone.addEventListener("drop", (e) => {
+          const file = e.dataTransfer.files?.[0];
+          if (file) setFile(file);
+        });
+
+        elements.dropzone.addEventListener("click", () => elements.fileInput.click());
+        elements.dropzone.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            elements.fileInput.click();
+          }
+        });
+
+        elements.fileInput.addEventListener("change", () => {
+          const file = elements.fileInput.files?.[0];
+          if (file) setFile(file);
+        });
+      }
+
+      elements.analyzeBtn.addEventListener("click", analyzeSample);
+      elements.clearBtn.addEventListener("click", clearSelection);
+      elements.clearHistoryBtn.addEventListener("click", () => {
+        state.history = [];
+        saveHistory();
+        renderHistory();
+      });
+
+      elements.copyBtn.addEventListener("click", async () => {
+        if (!state.lastResult) return;
+        try {
+          await navigator.clipboard.writeText(JSON.stringify(state.lastResult, null, 2));
+          const previous = elements.copyBtn.textContent;
+          elements.copyBtn.textContent = "Copied";
+          setTimeout(() => {
+            elements.copyBtn.textContent = previous;
+          }, 1200);
+        } catch {
+          elements.copyBtn.textContent = "Copy Failed";
         }
       });
 
-      function showError(message) {
-        resultBox.className = "result err";
-        resultBox.innerHTML = `<h2>Error</h2><p>${message}</p>`;
-      }
+      setupDropzone();
+      loadHistory();
+      renderHistory();
+      refreshHealth();
+      setInterval(refreshHealth, 20000);
     </script>
   </body>
 </html>

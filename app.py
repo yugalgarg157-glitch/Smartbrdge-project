@@ -3,6 +3,7 @@ import os
 import traceback
 import time
 from pathlib import Path
+import json
 
 from flask import Flask, jsonify, render_template, request
 import numpy as np
@@ -15,6 +16,7 @@ MODEL_ERROR = None
 MODEL_PATH = None
 MODEL_FILE_SIZE_MB = 0.0
 CLASS_NAMES = ["Parasitized", "Uninfected"]
+CLASS_INDEX_TO_NAME = {0: "Parasitized", 1: "Uninfected"}
 tf = None
 Image = None
 
@@ -45,7 +47,12 @@ if MODEL_ERROR is None:
                     [p for p in directory.iterdir() if p.is_file() and p.suffix.lower() in {".h5", ".keras"}]
                 )
 
-        candidate_models = sorted(candidate_models, key=lambda p: p.stat().st_mtime, reverse=True)
+        # Prefer substantial model artifacts over tiny placeholder files.
+        candidate_models = sorted(
+            candidate_models,
+            key=lambda p: (p.stat().st_size, p.stat().st_mtime),
+            reverse=True,
+        )
 
         if candidate_models:
             selected_model = candidate_models[0]
@@ -54,8 +61,28 @@ if MODEL_ERROR is None:
             print(f"Found model: {selected_model.name}")
             print(f"Model size: {MODEL_FILE_SIZE_MB} MB")
             model = tf.keras.models.load_model(MODEL_PATH, compile=False)
-            model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
             print(f"Loaded! Input: {model.input_shape}, Output: {model.output_shape}")
+
+            # Try loading class-index mapping saved during training.
+            possible_class_index_paths = [
+                Path(MODEL_PATH).parent / "class_indices.json",
+                current_dir / "models" / "class_indices.json",
+                current_dir / "class_indices.json",
+            ]
+            for class_idx_path in possible_class_index_paths:
+                if class_idx_path.exists():
+                    try:
+                        with class_idx_path.open("r", encoding="utf-8") as fp:
+                            class_to_index = json.load(fp)
+                        parsed = {int(idx): str(name) for name, idx in class_to_index.items()}
+                        if parsed:
+                            CLASS_INDEX_TO_NAME.clear()
+                            CLASS_INDEX_TO_NAME.update(parsed)
+                            print(f"Loaded class indices from: {class_idx_path}")
+                            print(f"Class map: {CLASS_INDEX_TO_NAME}")
+                            break
+                    except Exception as class_exc:  # noqa: BLE001
+                        print(f"Could not parse class indices from {class_idx_path}: {class_exc}")
         else:
             checked = ", ".join(str(p) for p in search_dirs)
             MODEL_ERROR = (
@@ -138,6 +165,58 @@ def heuristic_parasitized_probability(img_array: np.ndarray) -> float:
         return 0.5
 
 
+def extract_class_probabilities(prediction: np.ndarray) -> tuple[float, float]:
+    """
+    Return (parasitized_prob, uninfected_prob) in [0,1].
+    Supports:
+    - sigmoid/binary output shape (1,)
+    - softmax/multiclass output shape (>=2,)
+    """
+    raw = np.array(prediction, dtype="float32").squeeze()
+    if raw.ndim == 0:
+        raw = np.array([float(raw)], dtype="float32")
+    elif raw.ndim > 1:
+        raw = raw.ravel()
+
+    if raw.size == 1:
+        # Binary sigmoid: output is probability of class index 1.
+        p_class1 = float(np.clip(raw[0], 0.0, 1.0))
+        class1_name = CLASS_INDEX_TO_NAME.get(1, "Uninfected").lower()
+        if "parasit" in class1_name:
+            parasitized_prob = p_class1
+            uninfected_prob = 1.0 - p_class1
+        else:
+            uninfected_prob = p_class1
+            parasitized_prob = 1.0 - p_class1
+        return float(np.clip(parasitized_prob, 0.0, 1.0)), float(np.clip(uninfected_prob, 0.0, 1.0))
+
+    probs = raw.astype("float64")
+    if np.any(probs < 0.0) or not np.isclose(np.sum(probs), 1.0, atol=1e-2):
+        # Treat as logits if needed.
+        exp_probs = np.exp(probs - np.max(probs))
+        probs = exp_probs / np.sum(exp_probs)
+
+    parasitized_prob = 0.0
+    uninfected_prob = 0.0
+    for idx, prob in enumerate(probs):
+        class_name = CLASS_INDEX_TO_NAME.get(idx, f"class_{idx}").lower()
+        if "parasit" in class_name:
+            parasitized_prob += float(prob)
+        elif "uninfect" in class_name or "healthy" in class_name or "normal" in class_name:
+            uninfected_prob += float(prob)
+
+    if parasitized_prob == 0.0 and uninfected_prob == 0.0:
+        parasitized_prob = float(probs[0])
+        uninfected_prob = float(probs[1]) if probs.size > 1 else (1.0 - parasitized_prob)
+    else:
+        total = parasitized_prob + uninfected_prob
+        if total > 0:
+            parasitized_prob /= total
+            uninfected_prob /= total
+
+    return float(np.clip(parasitized_prob, 0.0, 1.0)), float(np.clip(uninfected_prob, 0.0, 1.0))
+
+
 @app.route("/predict", methods=["POST"])
 def predict():
     if model is None:
@@ -161,27 +240,19 @@ def predict():
         print(f"Prediction: {prediction}")
         print(f"Shape: {prediction.shape}")
 
-        model_uninfected_prob = float(prediction[0][0])
-        model_uninfected_prob = float(np.clip(model_uninfected_prob, 0.0, 1.0))
-        model_parasitized_prob = 1.0 - model_uninfected_prob
-        model_confidence = abs(model_uninfected_prob - 0.5) * 2.0
+        model_parasitized_prob, model_uninfected_prob = extract_class_probabilities(prediction)
 
         heuristic_paras_prob = heuristic_parasitized_probability(img_array)
-        heuristic_uninf_prob = 1.0 - heuristic_paras_prob
+        heuristic_uninfected_prob = 1.0 - heuristic_paras_prob
 
-        # If model is tiny/demo or uncertain, trust heuristic more.
+        # If model is tiny/demo, rely mostly on heuristic.
         if MODEL_FILE_SIZE_MB < 1.0:
             decision_source = "heuristic"
             final_parasitized_prob = heuristic_paras_prob
-            final_uninfected_prob = heuristic_uninf_prob
-        elif model_confidence < 0.20:
-            decision_source = "hybrid_low_confidence"
-            final_parasitized_prob = (0.6 * heuristic_paras_prob) + (0.4 * model_parasitized_prob)
-            final_uninfected_prob = 1.0 - final_parasitized_prob
         else:
-            decision_source = "hybrid_model_primary"
-            final_parasitized_prob = (0.25 * heuristic_paras_prob) + (0.75 * model_parasitized_prob)
-            final_uninfected_prob = 1.0 - final_parasitized_prob
+            decision_source = "model"
+            final_parasitized_prob = model_parasitized_prob
+        final_uninfected_prob = 1.0 - final_parasitized_prob
 
         if final_parasitized_prob >= 0.5:
             pred_class = 0
@@ -219,8 +290,10 @@ def predict():
                 "details": {
                     "parasitized_probability": round(parasitized_prob, 2),
                     "uninfected_probability": round(uninfected_prob, 2),
+                    "model_parasitized_probability": round(model_parasitized_prob * 100.0, 2),
                     "model_uninfected_probability": round(model_uninfected_prob * 100.0, 2),
                     "heuristic_parasitized_probability": round(heuristic_paras_prob * 100.0, 2),
+                    "heuristic_uninfected_probability": round(heuristic_uninfected_prob * 100.0, 2),
                 },
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
