@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Python cache/build
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Local uploads and generated artifacts
+uploads/
+
+# Keep training/data/model artifacts tracked for full project upload

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Malaria Cell Detection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Malaria Cell Detection</h1>
+      <p class="subtitle">Upload a blood cell image (PNG/JPG/JPEG) to detect malaria.</p>
+
+      <form id="predict-form" class="card">
+        <input id="file-input" type="file" accept=".png,.jpg,.jpeg,image/*" required />
+        <button type="submit">Analyze Sample</button>
+      </form>
+
+      <section id="result" class="result hidden"></section>
+    </main>
+
+    <script>
+      const form = document.getElementById("predict-form");
+      const fileInput = document.getElementById("file-input");
+      const resultBox = document.getElementById("result");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        if (!fileInput.files.length) {
+          showError("Please select an image.");
+          return;
+        }
+
+        const fd = new FormData();
+        fd.append("file", fileInput.files[0]);
+
+        resultBox.className = "result";
+        resultBox.textContent = "Analyzing...";
+
+        try {
+          const res = await fetch("/predict", {
+            method: "POST",
+            body: fd,
+          });
+          const data = await res.json();
+
+          if (!res.ok || !data.success) {
+            showError(data.error || "Prediction failed.");
+            return;
+          }
+
+          const isParasitized = data.prediction === "Parasitized";
+          const headline = isParasitized ? "PARASITIZED (Malaria Detected)" : "UNINFECTED (No Malaria Detected)";
+          const note = isParasitized
+            ? "Malaria parasites detected. Verify with healthcare professional."
+            : "No malaria parasites detected. Verify with healthcare professional.";
+
+          resultBox.className = `result ${isParasitized ? "err" : "ok"}`;
+          resultBox.innerHTML = `
+            <h2>${headline}</h2>
+            <p><strong>Confidence:</strong> ${data.confidence}%</p>
+            <p><strong>Parasitized Probability:</strong> ${data.details.parasitized_probability}%</p>
+            <p><strong>Uninfected Probability:</strong> ${data.details.uninfected_probability}%</p>
+            <p><strong>Model:</strong> ${data.model || "N/A"}</p>
+            <p><strong>Processing Time:</strong> ${data.processing_time || "N/A"}s</p>
+            <p><strong>Timestamp:</strong> ${data.timestamp}</p>
+            <p class="note">${note}</p>
+          `;
+        } catch (err) {
+          showError("Server error. Please try again.");
+        }
+      });
+
+      function showError(message) {
+        resultBox.className = "result err";
+        resultBox.innerHTML = `<h2>Error</h2><p>${message}</p>`;
+      }
+    </script>
+  </body>
+</html>

@@ -2,6 +2,7 @@ from datetime import datetime
 import os
 import traceback
 import time
+from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 import numpy as np
@@ -31,19 +32,34 @@ except Exception as exc:  # noqa: BLE001
 
 
 if MODEL_ERROR is None:
-    current_dir = os.getcwd()
+    current_dir = Path(os.getcwd())
     print(f"Directory: {current_dir}")
 
     try:
-        h5_files = sorted([f for f in os.listdir(current_dir) if f.lower().endswith(".h5")])
-        if h5_files:
-            MODEL_PATH = os.path.join(current_dir, h5_files[0])
-            print(f"Found model: {h5_files[0]}")
+        search_dirs = [current_dir, current_dir / "models"]
+        candidate_models = []
+        for directory in search_dirs:
+            if directory.exists():
+                candidate_models.extend(
+                    [p for p in directory.iterdir() if p.is_file() and p.suffix.lower() in {".h5", ".keras"}]
+                )
+
+        candidate_models = sorted(candidate_models, key=lambda p: p.stat().st_mtime, reverse=True)
+
+        if candidate_models:
+            selected_model = candidate_models[0]
+            MODEL_PATH = str(selected_model.resolve())
+            print(f"Found model: {selected_model.name}")
             model = tf.keras.models.load_model(MODEL_PATH, compile=False)
             model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
             print(f"Loaded! Input: {model.input_shape}, Output: {model.output_shape}")
         else:
-            MODEL_ERROR = "No .h5 file found in current directory"
+            checked = ", ".join(str(p) for p in search_dirs)
+            MODEL_ERROR = (
+                "No model file found (.h5 or .keras). "
+                f"Checked: {checked}. "
+                "Place a trained model in the project root or models/ folder."
+            )
             print(f"X {MODEL_ERROR}")
     except Exception as exc:  # noqa: BLE001
         MODEL_ERROR = str(exc)
