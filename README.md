@@ -68,19 +68,28 @@ Train and compare multiple models:
 python train_all_models.py --data-dir data/splits/train --img-size 128 --batch-size 32 --epochs 40 --best-model-name best_malaria_model.keras
 ```
 
-## Run Flask App
-`app.py` loads the first `.h5` model found in the project root.
+## How to Run (Local)
+`app.py` loads the newest model file from:
+- project root, or
+- `models/` folder
 
-Before running:
-- copy your best model file into the root folder (example: `best_malaria_model_fixed.h5`)
+Supported model formats:
+- `.h5`
+- `.keras`
 
-Start server:
+Recommended quick start:
 ```bash
+cd "/Users/aanyagarg/Documents/SMARTBRIDGE PROJECT"
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 python app.py
 ```
 
-Open:
+Open in browser:
 - http://127.0.0.1:5000
+
+If you see `Model: NOT LOADED`, add a trained model file (example: `best_malaria_model_fixed.h5`) in the root or `models/`, then restart.
 
 Health endpoint:
 - `GET /health`
@@ -99,15 +108,25 @@ curl -X POST http://127.0.0.1:5000/predict \
 - Not a substitute for professional medical diagnosis.
 - Model files and large datasets are excluded from Git by default via `.gitignore`.
 
-## Publish to GitHub
+## Update GitHub Repository
 If git is missing on macOS:
 ```bash
 xcode-select --install
 ```
 
-Then publish:
+Set remote (one-time):
 ```bash
 cd "/Users/aanyagarg/Documents/SMARTBRIDGE PROJECT"
-bash scripts/publish_github.sh "https://github.com/yugalgarg157-glitch/Project.git"
+git remote set-url origin "https://github.com/yugalgarg157-glitch/Smartbrdge-project.git"
 ```
 
+Commit and push updates:
+```bash
+git add .
+git commit -m "Update malaria app and run instructions"
+git push -u origin main
+```
+
+Authentication prompt:
+- Username: `yugalgarg157-glitch`
+- Password: use GitHub Personal Access Token (PAT), not your normal GitHub password.
