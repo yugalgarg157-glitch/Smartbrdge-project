@@ -6,6 +6,18 @@ The system classifies cell images into:
 - `Parasitized` (infected)
 - `Uninfected` (healthy)
 
+## Quick Run
+```bash
+git clone https://github.com/yugalgarg157-glitch/Smartbrdge-project.git
+cd Smartbrdge-project
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+Open: `http://127.0.0.1:5000`
+
 ## Project Summary
 - Dataset: malaria cell images from Kaggle (NIH source)
 - Pipeline: data preparation, training, evaluation, and Flask deployment
